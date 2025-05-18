@@ -1,20 +1,20 @@
 import { Text, SafeAreaView, StyleSheet, View, Dimensions, TouchableHighlight, Image } from 'react-native';
-import React from 'react';
+import { useNavigation } from '@react-navigation/native';
 
 let deviceHeight = Dimensions.get('window').height;
 let deviceWidth = Dimensions.get('window').width;
 
-
 const Navigation = () => {
 
   const menuButtonDimensions = 25;
+  const navigationFunc = useNavigation();
 
   return (
 
     <SafeAreaView style={styles.container}>
       <View style={styles.navBG}>
        <TouchableHighlight
-            onPress={this.changeScreenMenu}
+            onPress={() => navigationFunc.navigate('Home')}
         >
         <View style={styles.navButtons}>
             <Image
@@ -30,7 +30,7 @@ const Navigation = () => {
         </TouchableHighlight>
         
         <TouchableHighlight
-            onPress={this.changeScreenRecord}
+            onPress={() => navigationFunc.navigate('Calendar')}
         >
         
         <View style={styles.navButtons}>
@@ -47,7 +47,7 @@ const Navigation = () => {
         </TouchableHighlight>
 
         <TouchableHighlight
-            onPress={this.changeScreenEdit}
+            onPress={() => navigationFunc.navigate('NewEvent')}
         >
         
         <View style={styles.specialButton}>
@@ -59,7 +59,7 @@ const Navigation = () => {
         </TouchableHighlight>
         
         <TouchableHighlight
-            onPress={this.changeScreenEdit}
+            onPress={() => navigationFunc.navigate('Study')}
         >
         
         <View style={styles.navButtons}>
