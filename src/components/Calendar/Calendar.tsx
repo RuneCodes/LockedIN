@@ -12,7 +12,7 @@ import { DefaultTheme } from '../../theme';
 import { weekDays, daysInEachMonth, months } from './const';
 import { generateMatrix } from './utils';
 
-function Calendar({ date = new Date() }: { date: Date }) {
+function Calendar({ date = new Date(), onDateChange }: { date: Date, onDateChange?: (date: Date) => void }) {
   const [activeDate, setActiveDate] = React.useState(date);
 
   React.useEffect(() => {
@@ -25,6 +25,9 @@ function Calendar({ date = new Date() }: { date: Date }) {
     if (typeof item !== 'string' && item != -1) {
       const newDate = new Date(activeDate.setDate(item));
       setActiveDate(newDate);
+        if (onDateChange) {
+        onDateChange(newDate);
+      }
     }
   };
 
@@ -36,6 +39,7 @@ function Calendar({ date = new Date() }: { date: Date }) {
     var rowItems = row.map((item: any, colIndex: number) => {
       return (
         <TouchableOpacity
+          key={colIndex}
           onPress={() => _onPress(item)}
           style={[
             styles.date,
@@ -46,7 +50,7 @@ function Calendar({ date = new Date() }: { date: Date }) {
           <Text
             style={{
               textAlign: 'center',
-              color: colIndex == 0 ? '#a00' : '#000',
+              color: colIndex == 0 ? '#000' : '#000',
               fontWeight: item == activeDate.getDate() ? 'bold' : 'normal',
               fontSize: 14,
             }}>
@@ -62,6 +66,9 @@ function Calendar({ date = new Date() }: { date: Date }) {
   const changeMonth = (n: number) => {
     const newDate = new Date(activeDate.setMonth(activeDate.getMonth() + n));
     setActiveDate(newDate);
+    if (onDateChange) {
+      onDateChange(newDate);
+    }
   };
 
   return (

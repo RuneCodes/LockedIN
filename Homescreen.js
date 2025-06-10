@@ -1,6 +1,7 @@
 import { Text, SafeAreaView, StyleSheet, View, FlatList,Dimensions, TouchableHighlight, Image } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navigation from './Navbar';
+import { useToken } from './TokenContext';
 
 let deviceHeight = Dimensions.get('window').height;
 let deviceWidth = Dimensions.get('window').width;
@@ -12,46 +13,49 @@ const HomeScreen = () => {
       dayForm: 'loading...',
   }
 
-  const getCurrentDate = ()=> {
+  const months = ["Jan", "Feb","Mar","Apr","May","June","July", "Aug","Sept", "Oct","Nov","Dec"];
+  const weekDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  const { token } = useToken();
+
+  const getCurrentDate = () => {
 
       var month = today.getMonth() + 1;
       const dayOfWeek = today.getDay(); 
-      const weekDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const months = ["Jan", "Feb","Mar","Apr","May","June","July", "Aug","Sept", "Oct","Nov","Dec"];
  
       return weekDays[dayOfWeek] + ', ' + months[month-1] + ' ' + todayDate;
   }
 
-  const ASSESSMENT_DATA = [
+  const [assessmentData, setAssessmentData] = useState([
     {
       id: 0,
       title: 'CS HW',
-      due: 'Due Thur, June 5',
-      time: '12:00 - 1:00 PM',
+      due: 'Fileinfo Project',
+      time: 'Due 11:59, June 5',
       image: 'science',
       classification: 'to-do',
     },
     {
       id: 1,
       title: 'APP DEV Project',
-      due: 'Due Sat, June 7',
-      time: '5:00 - 6:00 PM',
+      due: 'Develop a fully functioning App!',
+      time: 'Due 10:00, June 7',
       image: 'science',
       classification: 'project',
     },
     {
       id: 2,
       title: 'BIOLOGY ASSESSMENT',
-      due: 'Due Fri, June 6',
-      time: '3:00 - 4:00 PM',
+      due: 'The Mitochondria is...',
+      time: 'Due 9:59, June 6',
       image: 'science',
       classification: 'test',
     },
     {
       id: 3,
       title: 'HISTORY QUIZ - CIVIL WAR',
-      due: 'Due Mon, June 9',
-      time: '10:00 - 11:00 AM',
+      due: 'Go to iLAB.',
+      time: 'Due 3:00, June 9',
       image: 'humanities',
       classification: 'test',
     },
@@ -63,10 +67,92 @@ const HomeScreen = () => {
       image: 'classroom',
       classification: 'classroom',
     },
-  ];
+  ]);
+
+  const ACCESS_TOKEN = token
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+          const response = await fetch("https://classroom.googleapis.com/v1/courses", {
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+          },
+        });
+        const coursesData = await response.json();
+        const courses = coursesData.courses || [];
+  
+        for (const course of courses) {
+        const courseId = course.id;
+        const courseWorkResponse = await fetch(
+          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork`,
+          {
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN}`,
+            },
+          }
+        );
+        const courseWorkData = await courseWorkResponse.json();
+        const assignments = courseWorkData.courseWork || [];
+        const submissionRequest = await fetch(
+          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/-/studentSubmissions?userId=me`,
+          {
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN}`,
+            },
+          }
+        );
+        const submissionData = await submissionRequest.json();
+        const submissions = submissionData.studentSubmissions  || [];
+        addToArray(assignments, submissions);
+      }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        }
+    }; 
+
+    fetchData();
+
+    const intervalId = setInterval(fetchData, 600000);
+
+    return () => clearInterval(intervalId); 
+
+  }, []);
+
+  const addToArray = (newData, submittedData) => {
+
+    const itemsToAdd = [];
+    let index = assessmentData.length;
+    for(let k = 0; k < newData.length; k++) {
+      const isInArray = assessmentData.find(element => element.title === newData[k].title);
+      const isSubmitted = submittedData.find(element => element.courseWorkId === newData[k].id);
+      if (typeof isInArray === 'undefined' && isSubmitted.state !== 'TURNED_IN') {
+        const tempObject = { 
+          id: index, 
+          title: newData[k].title, 
+          due: newData[k].description.length > 18 ? newData[k].description.substring(0, 17) : newData[k].description, 
+          time: 'Due '+ newData[k].dueTime.hours + ":" + newData[k].dueTime.minutes +", " + months[newData[k].dueDate.month] + " " +newData[k].dueDate.day, 
+          image: (newData[k].maxPoints > 50 || newData[k].title.toLowerCase().indexOf("project") > -1 )? 'science' : 'humanities', 
+          classification: (newData[k].maxPoints > 50 || newData[k].title.toLowerCase().indexOf("project") > -1 )? 'project' : 'to-do', 
+        };
+      
+        itemsToAdd.push(tempObject);
+        index++;
+      }
+    }
+
+    const withoutClassroom = assessmentData.filter(element => element.classification !== 'classroom');
+    const classroom = assessmentData.filter(element => element.classification === 'classroom');
+    const updatedList = [...withoutClassroom, ...itemsToAdd, ...classroom];
+    setAssessmentData(updatedList);
+  };
+
+  const removeMultipleQuotes = (string) => {
+  return string.replace(/^["']+|["']+$/g, '');
+}
 
   const countClassification = (type) => {
-    return ASSESSMENT_DATA.filter(icon => icon.classification === type).length;
+    return assessmentData.filter(icon => icon.classification === type).length;
   };
 
   const abbreviatedWeekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -160,7 +246,7 @@ const HomeScreen = () => {
         </View>
         <View style={styles.homeScrollContainer}>
           <FlatList
-            data={ASSESSMENT_DATA.filter(item => item.classification === filterClassification || item.classification === 'classroom')}
+            data={assessmentData.filter(item => item.classification === filterClassification || item.classification === 'classroom')}
             renderItem={({item}) => <Assessment assessment={item} />}
             keyExtractor={item => item.id}
           />
@@ -198,7 +284,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(182, 113, 112, 0.75)',
     justifyContent: 'space-between',
     flexDirection: 'row',
-    marginBottom: 10,
+    marginBottom: 15,
     borderRadius: 3,
   },
   assessmentText: {
@@ -212,18 +298,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#454444',
     maxHeight: 2 * deviceHeight / 19,
-    fontSize: 18,
+    fontSize: 13,
   },
   assessmentDescription: {
     color: '#454444',
     opacity: 0.8,
     textAlign: 'left', 
-    fontSize: 13,
+    fontSize: 11,
   },
   assessmentTime: {
     color: '#454444',
     opacity: 0.8,
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '600',
   },
 

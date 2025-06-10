@@ -76,7 +76,7 @@ const Navigation = () => {
         </TouchableHighlight>
 
         <TouchableHighlight
-            onPress={this.changeScreenEdit}
+            onPress={() => navigationFunc.navigate('Settings')}
         >
         
         <View style={styles.navButtons}>

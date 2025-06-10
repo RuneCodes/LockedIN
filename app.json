@@ -1,7 +1,15 @@
 {
   "expo": {
+    "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.516737559102-jga8re2v46uiabotpt2mbrs897653632"
+        }
+      ]
+    ],
     "name": "lockedin",
-    "slug": "snack-b9089f9e-8b54-4d1c-a90e-0310a65c9752",
+    "slug": "snack-35427f08-e6f0-4614-ae7d-25e675d6db5e",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +21,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "516737559102-8i9nr7di9bo1uinmmnstc6vtg2odkf52.apps.googleusercontent.com"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,6 +32,8 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "scheme": "locked-in"
+
   }
 }

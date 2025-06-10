@@ -1,6 +1,7 @@
 import { Text, SafeAreaView, StyleSheet, View, FlatList,Dimensions, TouchableHighlight, Image } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navigation from './Navbar';
+import { useToken } from './TokenContext';
 
 let deviceHeight = Dimensions.get('window').height;
 let deviceWidth = Dimensions.get('window').width;
@@ -16,179 +17,211 @@ const Calendar = () => {
   const today = new Date();
   const todayIndex = today.getDay();
   const todayDate = today.getDate();
+  const weekDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  const getCurrentDate =()=> {
+  const getCurrentDate = () => {
 
       var month = today.getMonth() + 1;
       const dayOfWeek = today.getDay(); 
-      const weekDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       const months = ["Jan", "Feb","Mar","Apr","May","June","July", "Aug","Sept", "Oct","Nov","Dec"];
- 
-      return weekDays[dayOfWeek] + ', ' + months[month-1] + ' ' + todayDate;
+       return weekDays[dayOfWeek] + ', ' + months[month-1] + ' ' + todayDate;
   }
 
-  const DATA = [
+  const [Monday, setMondayData] = useState([]);
+  const [Tuesday, setTuesdayData] = useState([]);
+  const [Wednesday, setWednesdayData] = useState([]);
+  const [Thursday, setThursdayData] = useState([]);
+  const [Friday, setFridayData] = useState([]);
+  const [Saturday, setSaturdayData] = useState([]);
+  const [Sunday, setSundayData] = useState([]);
+  const [allAssignments, setAllAssignments] = useState([]);
+
+  const dataFunctionsArray = [setSundayData, setMondayData, setTuesdayData, setWednesdayData, setThursdayData, setFridayData, setSaturdayData];
+  const dataArray = [Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday];
+  const availableTimes = [
+    '7 AM', '8 AM', '9 AM', '10 AM', '11 AM', '12 PM',
+    '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM',
+    '7 PM', '8 PM', '9 PM', '10 PM', '11 PM', '12 AM',
+  ];
+
+  const { token, newDataArray } = useToken();
+  const ACCESS_TOKEN = token
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+          const response = await fetch("https://classroom.googleapis.com/v1/courses", {
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+          },
+        });
+        const coursesData = await response.json();
+        const courses = coursesData.courses || [];
+        console.log(courses);
+        for (const course of courses) {
+        const courseId = course.id;
+        const courseWorkResponse = await fetch(
+          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork`,
+          {
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN}`,
+            },
+          }
+        );
+        const courseWorkData = await courseWorkResponse.json();
+        const assignments = courseWorkData.courseWork || [];
+        const submissionRequest = await fetch(
+          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/-/studentSubmissions?userId=me`,
+          {
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN}`,
+            },
+          }
+        );
+        const submissionData = await submissionRequest.json();
+        const submissions = submissionData.studentSubmissions  || [];
+        addToArray(assignments, submissions);
+      }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        }
+    }; 
+
+    fetchData();
+
+    const intervalId = setInterval(fetchData, 600000);
+
+    return () => clearInterval(intervalId); 
+
+  }, []);
+
+  useEffect(() => {
+    if (allAssignments.length > 0) {
+      updateArrays();
+    }
+  }, [allAssignments]);
+
+  const addToArray = (newData, submittedData) => {
+    
+    for(let k = 0; k < newData.length; k++) {
+      const isSubmitted = submittedData.find(element => element.courseWorkId === newData[k].id);
+      if (isSubmitted.state !== 'TURNED_IN') {
+      try {
+        const dueDate = newData[k].dueDate;
+        if (!dueDate || typeof dueDate.day !== 'number' || typeof newData[k].dueTime.hours !== 'number') {
+          continue; 
+        }
+        const dateDifference = newData[k].dueDate.day - todayDate;
+        const dateInMiliseconds = new Date(newData[k].dueDate.year, newData[k].dueDate.month, newData[k].dueDate.day);
+        if (dateDifference < 7 && dateDifference >= 0 && dateInMiliseconds  - today <= 3000000000 && dateInMiliseconds  - today >= 0) {
+          let description = '';
+          try {
+            description = newData[k].description.length > 18 ? newData[k].description.substring(0, 17) : newData[k].description;
+          } catch (e) {
+            description = "No Description.";
+          }
+          const tempObject = { 
+            id: newData[k].dueTime.hours > 11 ? (newData[k].dueTime.hours % 12 +  " PM") : (newData[k].dueTime.hours + " AM"), 
+            title: newData[k].title.length > 18 ? newData[k].title.substring(0, 18) : newData[k].title, 
+            duration: '30',
+            description: description, 
+            event: true,
+            day: newData[k].dueDate.day,
+            shouldStudy: ((newData[k].maxPoints > 50 || newData[k].title.toLowerCase().indexOf("test") > -1 || newData[k].title.toLowerCase().indexOf("assessment") > -1 || newData[k].title.toLowerCase().indexOf("quiz") > -1 || newData[k].title.toLowerCase().indexOf("cumulative") > -1 || newData[k].title.toLowerCase().indexOf("exam") > -1) ? true : false),
+          };
+          setAllAssignments(oldData => [...oldData, tempObject]);
+        }
+      } catch (error) {
+        console.log(error);
+      }
+      }
+    }
+    try {
+      if (newDataArray.length > 0) {
+        const addedDay = new Date(newDataArray[1]);
+        console.log(addedDay);
+        console.log(addedDay.getDate());
+        console.log(addedDay.getHours());
+        const tempObject = { 
+          id: addedDay.getHours() > 11 ? (addedDay.getHours() % 12 +  " PM") : (addedDay.getHours() + " AM"), 
+          title: newDataArray[2] > 18 ? newDataArray[2].substring(0, 18) : newDataArray[2], 
+          duration: '30',
+          description: "No Description", 
+          event: true,
+          day: addedDay.getDate(),
+          shouldStudy: ((newDataArray[0] >= 0.5 || newDataArray[2].toLowerCase().indexOf("test") > -1 || newDataArray[2].toLowerCase().indexOf("assessment") > -1 || newDataArray[2].toLowerCase().indexOf("quiz") > -1 || newDataArray[2].toLowerCase().indexOf("cumulative") > -1 || newDataArray[2].toLowerCase().indexOf("exam") > -1) ? true : false),
+        };
+        console.log(tempObject);
+        setAllAssignments(oldData => [...oldData, tempObject]);
+      }
+    } catch (e)
     {
-    id: '7 AM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '8 AM',
-    title: 'Biology',
-    duration: '30',
-    description: 'Study for the test',
-    event: true,
-    day: todayDate,
-  },
-  {
-    id: '9 AM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '10 AM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '11 AM',
-    title: 'History',
-    duration: '60',
-    description: 'Practice presentation on Al Gore',
-    event: true,
-    day: todayDate,
-  },
-  {
-    id: 'Noon',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '1 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '2 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '3 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '4 PM',
-    title: 'Computer Science',
-    duration: '30',
-    description: 'Work on LockedIN 😎',
-    event: true,
-    day: todayDate,
-  },
-  {
-    id: '5 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '6 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '7 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '8 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '9 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '10 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '11 PM',
-    title: 'Math',
-    duration: '30',
-    description: 'Work on H.W.',
-    event: true,
-    day: todayDate,
-  },
-  {
-    id: '12 PM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '1 AM',
-    title: 'empty',
-    duration: '30',
-    description: 'empty',
-    event: false,
-    day: todayDate,
-  },
-  {
-    id: '2 AM',
-    title: 'test event',
-    duration: '30',
-    description: 'hello!',
-    event: true,
-    day: todayDate + 3,
-  },
-];
+      console.log(e);
+    }
+  }
+
+  const createSchedule = () => {
+    for(let i = 0; i < allAssignments.length; i++)
+    {
+      if(allAssignments[i].shouldStudy) {
+        allAssignments[i].shouldStudy = false;
+        for(let j = todayDate; j < allAssignments[i].day; j++)
+        {
+          
+          const studyingOnDay = allAssignments.filter(a => a.day === today);
+          let randomTime = '11 AM';
+          let existing = 'undefined';
+          do {
+            randomTime = availableTimes[Math.floor(Math.random() * availableTimes.length)];
+            existing = studyingOnDay.find(element => element.id === randomTime);
+          } while (existing === 'undefined')
+          const tempObject = { 
+            id: randomTime, 
+            title: "Study for " + (allAssignments[i].title.length > 10 ?allAssignments[i].title.substring(0, 10) : allAssignments[i].title), 
+            duration: '30',
+            description: "Time to LockIN!", 
+            event: true,
+            day: j,
+            shouldStudy: false,
+          };
+          setAllAssignments(oldData => [...oldData, tempObject]);
+        }
+      }
+    }
+  }
+
+ const updateArrays = () => {
+  createSchedule();
+  for (let m = 0; m < dataArray.length; m++) {
+    const dayArray = [];
+    const dayNumber = m + todayDate;
+    const assignmentsForDay = allAssignments.filter(a => a.day === dayNumber);
+    for (let n = 0; n < availableTimes.length; n++) {
+      const existing = assignmentsForDay.find(element => element.id === availableTimes[n]);
+      if (existing) {
+        dayArray.push(existing);
+      } else {
+        dayArray.push({
+          id: availableTimes[n],
+          title: 'empty',
+          duration: '30',
+          description: 'empty',
+          event: false,
+          day: todayDate + m,
+        });
+      }
+    }
+    dataFunctionsArray[m](dayArray);
+    
+    //dataFunctionsArray[m](dayArray);
+    //dataFunctionsArray[ dateDifference ](oldData => [...oldData, tempObject])
+  }
+};
+
+   
+  const removeMultipleQuotes = (string) => {
+    return string.replace(/^["']+|["']+$/g, '');
+  }
 
  const DATE_DATA = Array.from({ length: 7 }).map((_, i) => ({
   id: `bubble-${i}`,
@@ -202,11 +235,11 @@ const Calendar = () => {
     <View style={styles.leftTime}>
       <Text style={styles.leftText}>{item.id}</Text>
     </View>
-    <View style={[ item.event && item.day == todayDate + highlightedIndex ? styles.item : styles.nonitem, // change logic so event renders to an empty style if it is for that date, current model is not sustainable.
+    <View style={[ item.event && item.day == todayDate + highlightedIndex ? styles.item : styles.nonitem, 
                   { height: (parseInt(item.duration, 10) / 40) * 2 * deviceHeight / 18, }]}>
       <View style={styles.sidebar}>
       </View>
-      <View style={[styles.calendarText]}>
+      <View style={styles.calendarText}>
         <Text style={styles.calendarTitle}>{item.title}</Text>
         <Text style={styles.calendarSubtext}>{item.description}</Text>
         <Text style={styles.calendarTime}>{item.duration} min</Text>
@@ -256,7 +289,7 @@ const Calendar = () => {
         <View style={styles.scrollContainer}>
           {
           <FlatList
-            data={DATA}
+            data={dataArray[highlightedIndex]}
             renderItem={({item}) => <Item item={item} />}
             keyExtractor={item => item.id}
           /> }
@@ -280,12 +313,6 @@ const styles = StyleSheet.create({
   generalContainer: {
     backgroundColor: '#00000',
     flex: 1,
-  },
-  paragraph: {
-    marginTop: 24,
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
   },
   // CALENDAR
   totalitem:{
@@ -314,11 +341,10 @@ const styles = StyleSheet.create({
     width: 8 * deviceWidth / 10,
     justifyContent: 'space-between',
     flexDirection: 'row',
-    backgroundColor: 'red', // for testing purposes, remove!
     opacity: 0,
   },
   calendarText: {
-    paddingTop: 10,
+    paddingTop: 3,
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: 7.5 * deviceWidth / 10,
@@ -326,7 +352,8 @@ const styles = StyleSheet.create({
   calendarTitle: {
     fontWeight: 'bold',
     color: '#454444',
-    width: 2.1 * deviceWidth / 10,
+    width: 2.6 * deviceWidth / 10,
+    marginRight: 3,
   },
   calendarSubtext: {
     color: '#454444',
